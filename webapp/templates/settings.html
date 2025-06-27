@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Honeypot System{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cog"></i> System Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Network Configuration</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Host:</strong></td>
+                                        <td>{{ config.host }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>SSH Port:</strong></td>
+                                        <td>{{ config.ssh_port }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>HTTP Port:</strong></td>
+                                        <td>{{ config.http_port }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>MySQL Port:</strong></td>
+                                        <td>{{ config.mysql_port }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>FTP Port:</strong></td>
+                                        <td>{{ config.ftp_port }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Web Interface:</strong></td>
+                                        <td>{{ config.web_host }}:{{ config.web_port }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Features Status</h6>
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Telegram Notifications:</strong></td>
+                                        <td>
+                                            {% if config.telegram_enabled %}
+                                                <span class="badge bg-success">Enabled</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Disabled</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Threat Intelligence:</strong></td>
+                                        <td>
+                                            {% if config.threat_intelligence_enabled %}
+                                                <span class="badge bg-success">Enabled</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Disabled</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Rate Limiting:</strong></td>
+                                        <td>
+                                            {% if config.rate_limiting_enabled %}
+                                                <span class="badge bg-success">Enabled</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Disabled</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Database Path:</strong></td>
+                                        <td><code>{{ config.database_path }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Log Level:</strong></td>
+                                        <td><span class="badge bg-info">{{ config.log_level }}</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Note:</strong> Configuration changes require restarting the honeypot system.
+                        Edit the <code>settings.py</code> file to modify these settings.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

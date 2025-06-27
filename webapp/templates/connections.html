@@ -1,0 +1,949 @@
+{% extends "base.html" %}
+
+{% block title %}Connections - Honeypot System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-list"></i> Connection Logs
+        </h1>
+        
+        <!-- Test Button for Debugging -->
+        <div class="alert alert-info">
+            <strong>Debug:</strong> 
+            <button class="btn btn-sm btn-primary" onclick="analyzeIP('192.168.0.124')">
+                <i class="fas fa-search"></i> Test Threat Analysis (192.168.0.124)
+            </button>
+            <small class="text-muted ms-2">Check browser console for debug logs</small>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-filter"></i> Filters
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('connections') }}">
+                    <div class="row">
+                        <div class="col-md-2">
+                            <label for="ip" class="form-label">IP Address</label>
+                            <input type="text" class="form-control" id="ip" name="ip" 
+                                   value="{{ filters.ip }}" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="service" class="form-label">Service</label>
+                            <select class="form-control" id="service" name="service">
+                                <option value="">All Services</option>
+                                <option value="SSH" {% if filters.service == 'SSH' %}selected{% endif %}>SSH</option>
+                                <option value="HTTP" {% if filters.service == 'HTTP' %}selected{% endif %}>HTTP</option>
+                                <option value="MySQL" {% if filters.service == 'MySQL' %}selected{% endif %}>MySQL</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="country" class="form-label">Country</label>
+                            <input type="text" class="form-control" id="country" name="country" 
+                                   value="{{ filters.country }}" placeholder="e.g., United States">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="date_from" class="form-label">From Date</label>
+                            <input type="date" class="form-control" id="date_from" name="date_from" 
+                                   value="{{ filters.date_from }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="date_to" class="form-label">To Date</label>
+                            <input type="date" class="form-control" id="date_to" name="date_to" 
+                                   value="{{ filters.date_to }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search"></i> Filter
+                                </button>
+                                <a href="{{ url_for('connections') }}" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> Clear
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connections Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-table"></i> Connection Attempts
+                </div>
+                <div>
+                    <button class="btn btn-danger btn-sm me-2" onclick="clearDatabase()">
+                        <i class="fas fa-trash"></i> Clear Database
+                    </button>
+                    <span class="badge bg-primary">{{ connections|length }} results</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if connections %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Timestamp</th>
+                                <th>IP Address</th>
+                                <th>Service</th>
+                                <th>Port</th>
+                                <th>Location</th>
+                                <th>ISP</th>
+                                <th>User Agent</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for connection in connections %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">{{ connection.id }}</span>
+                                </td>
+                                <td>
+                                    <small>{{ connection.timestamp | format_timestamp }}</small>
+                                </td>
+                                <td>
+                                    <code>{{ connection.ip_address }}</code>
+                                </td>
+                                <td>
+                                    <span class="badge service-badge service-{{ connection.service_name.lower() }}">
+                                        {{ connection.service_name }}
+                                    </span>
+                                </td>
+                                <td>{{ connection.port }}</td>
+                                <td>
+                                    {% if connection.city and connection.country %}
+                                        <div>{{ connection.city }}</div>
+                                        <small class="text-muted">{{ connection.country }}</small>
+                                    {% elif connection.country %}
+                                        {{ connection.country }}
+                                    {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if connection.isp %}
+                                        <div>{{ connection.isp | truncate(25) }}</div>
+                                        {% if connection.latitude and connection.longitude %}
+                                            <small class="text-muted">
+                                                {{ "%.4f"|format(connection.latitude) }}, {{ "%.4f"|format(connection.longitude) }}
+                                            </small>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if connection.user_agent %}
+                                        <small class="text-muted">{{ connection.user_agent | truncate(30) }}</small>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if connection.id %}
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="showConnectionDetails('{{ connection.id }}')"
+                                            title="View connection details (ID: {{ connection.id }})">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    {% else %}
+                                    <button class="btn btn-sm btn-outline-secondary" 
+                                            disabled
+                                            title="No connection ID available">
+                                        <i class="fas fa-eye-slash"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                {% if total_pages > 1 %}
+                <nav aria-label="Connection pagination">
+                    <ul class="pagination justify-content-center">
+                        {% if current_page > 1 %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('connections', page=current_page-1, **filters) }}">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for page_num in range(1, total_pages + 1) %}
+                            {% if page_num == current_page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% elif page_num <= 3 or page_num > total_pages - 3 or (page_num >= current_page - 1 and page_num <= current_page + 1) %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('connections', page=page_num, **filters) }}">{{ page_num }}</a>
+                            </li>
+                            {% elif page_num == 4 and current_page > 6 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                            {% elif page_num == total_pages - 3 and current_page < total_pages - 5 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if current_page < total_pages %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('connections', page=current_page+1, **filters) }}">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No connections found</h5>
+                    <p class="text-muted">
+                        {% if filters.ip or filters.service or filters.country or filters.date_from or filters.date_to %}
+                            Try adjusting your filters or 
+                            <a href="{{ url_for('connections') }}">view all connections</a>.
+                        {% else %}
+                            No connection attempts have been recorded yet.
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connection Details Modal -->
+<div class="modal fade" id="connectionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Connection Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="connectionModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Threat Analysis Modal -->
+<div class="modal fade" id="threatAnalysisModal" tabindex="-1" aria-labelledby="threatAnalysisModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="threatAnalysisModalLabel">Threat Analysis</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="threatAnalysisModalBody">
+                <!-- Content will be loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showConnectionDetails(connectionId) {
+    console.log('showConnectionDetails called with ID:', connectionId, 'Type:', typeof connectionId);
+    
+    try {
+        // Validate connection ID
+        if (!connectionId || connectionId === 'None' || connectionId === '' || connectionId === 'undefined') {
+            console.error('Invalid connection ID:', connectionId);
+            alert('Invalid connection ID: ' + connectionId);
+            return;
+        }
+        
+        console.log('Opening modal for connection ID:', connectionId);
+        
+        const modal = new bootstrap.Modal(document.getElementById('connectionModal'));
+        const modalBody = document.getElementById('connectionModalBody');
+        
+        modal.show();
+        
+        // Show loading state
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading connection details...</p>
+            </div>
+        `;
+        
+        // Fetch real connection data from API
+        fetch(`/api/connection/${connectionId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    const connection = data.data;
+                    modalBody.innerHTML = formatConnectionDetails(connection);
+                } else {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Error:</strong> ${data.error || 'Failed to load connection details'}
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching connection details:', error);
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Error:</strong> Failed to load connection details: ${error.message}
+                    </div>
+                `;
+            });
+        
+    } catch (error) {
+        console.error('Error showing connection details:', error);
+        alert('Error loading connection details: ' + error.message);
+    }
+}
+
+function formatConnectionDetails(connection) {
+    const timestamp = connection.timestamp ? new Date(connection.timestamp).toLocaleString() : 'Unknown';
+    const service = connection.service_name || 'Unknown';
+    const ip = connection.ip_address || 'Unknown';
+    const port = connection.port || 'Unknown';
+    
+    // Service-specific data
+    let serviceData = '';
+    if (service === 'SSH') {
+        const username = connection.ssh_username || 'Not captured';
+        const password = connection.ssh_password || 'Not captured';
+        serviceData = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <strong>SSH Username:</strong>
+                    <code class="d-block mt-1">${username}</code>
+                </div>
+                <div class="col-md-6">
+                    <strong>SSH Password:</strong>
+                    <code class="d-block mt-1">${password}</code>
+                </div>
+            </div>
+        `;
+    } else if (service === 'HTTP') {
+        const headers = connection.http_headers || 'Not captured';
+        const postData = connection.http_post_data || 'Not captured';
+        serviceData = `
+            <div class="row mb-3">
+                <div class="col-12">
+                    <strong>HTTP Headers:</strong>
+                    <pre class="mt-1 bg-light p-2 rounded"><code>${headers}</code></pre>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-12">
+                    <strong>POST Data:</strong>
+                    <pre class="mt-1 bg-light p-2 rounded"><code>${postData}</code></pre>
+                </div>
+            </div>
+        `;
+    } else if (service === 'MySQL') {
+        const username = connection.mysql_username || 'Not captured';
+        const query = connection.mysql_query || 'Not captured';
+        serviceData = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <strong>MySQL Username:</strong>
+                    <code class="d-block mt-1">${username}</code>
+                </div>
+                <div class="col-md-6">
+                    <strong>MySQL Query:</strong>
+                    <code class="d-block mt-1">${query}</code>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Geolocation data
+    let locationData = '';
+    if (connection.country || connection.city) {
+        locationData = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <strong>Country:</strong> ${connection.country || 'Unknown'}
+                </div>
+                <div class="col-md-6">
+                    <strong>City:</strong> ${connection.city || 'Unknown'}
+                </div>
+            </div>
+        `;
+        
+        if (connection.latitude && connection.longitude) {
+            locationData += `
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Coordinates:</strong> ${connection.latitude}, ${connection.longitude}
+                    </div>
+                    <div class="col-md-6">
+                        <a href="https://maps.google.com/?q=${connection.latitude},${connection.longitude}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-map-marker-alt"></i> View on Map
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    // ISP and network info
+    let networkData = '';
+    if (connection.isp) {
+        networkData = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <strong>ISP:</strong> ${connection.isp}
+                </div>
+                <div class="col-md-6">
+                    <strong>Reverse DNS:</strong> ${connection.reverse_dns || 'Not available'}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Request data
+    let requestData = '';
+    if (connection.request_data) {
+        requestData = `
+            <div class="row mb-3">
+                <div class="col-12">
+                    <strong>Request Data:</strong>
+                    <pre class="mt-1 bg-light p-2 rounded"><code>${connection.request_data}</code></pre>
+                </div>
+            </div>
+        `;
+    }
+    
+    // User agent
+    let userAgentData = '';
+    if (connection.user_agent) {
+        userAgentData = `
+            <div class="row mb-3">
+                <div class="col-12">
+                    <strong>User Agent:</strong>
+                    <code class="d-block mt-1">${connection.user_agent}</code>
+                </div>
+            </div>
+        `;
+    }
+    
+    return `
+        <div class="connection-details">
+            <!-- Basic Information -->
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <strong>Connection ID:</strong><br>
+                    <span class="badge bg-secondary">${connection.id}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Service:</strong><br>
+                    <span class="badge service-badge service-${service.toLowerCase()}">${service}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Port:</strong><br>
+                    <code>${port}</code>
+                </div>
+                <div class="col-md-3">
+                    <strong>Timestamp:</strong><br>
+                    <small>${timestamp}</small>
+                </div>
+            </div>
+            
+            <!-- IP Address -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <strong>IP Address:</strong>
+                    <code class="d-block mt-1">${ip}</code>
+                </div>
+            </div>
+            
+            <!-- Location Information -->
+            ${locationData}
+            
+            <!-- Network Information -->
+            ${networkData}
+            
+            <!-- Service-specific data -->
+            ${serviceData}
+            
+            <!-- User Agent -->
+            ${userAgentData}
+            
+            <!-- Request Data -->
+            ${requestData}
+            
+            <!-- Actions -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-info btn-sm" onclick="analyzeIP('${ip}')">
+                            <i class="fas fa-search"></i> Threat Analysis
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="blacklistIP('${ip}')">
+                            <i class="fas fa-ban"></i> Blacklist IP
+                        </button>
+                        <a href="/connections?ip=${ip}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-list"></i> View Related
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function analyzeIP(ip) {
+    console.log('analyzeIP called with IP:', ip); // Debug log
+    
+    // Show loading state
+    const modal = document.getElementById('threatAnalysisModal');
+    const modalTitle = document.getElementById('threatAnalysisModalLabel');
+    const modalBody = document.getElementById('threatAnalysisModalBody');
+    
+    if (!modal || !modalTitle || !modalBody) {
+        console.error('Modal elements not found!'); // Debug log
+        alert('Error: Modal elements not found. Please refresh the page.');
+        return;
+    }
+    
+    modalTitle.textContent = `Threat Analysis for ${ip}`;
+    modalBody.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Analyzing threat intelligence data...</p>
+        </div>
+    `;
+    
+    // Show the modal
+    try {
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+        console.log('Modal shown successfully'); // Debug log
+    } catch (error) {
+        console.error('Error showing modal:', error); // Debug log
+        alert('Error showing modal: ' + error.message);
+        return;
+    }
+    
+    // Fetch threat analysis data
+    console.log('Fetching threat analysis data...'); // Debug log
+    fetch(`/api/security/threat-analysis/${ip}?_t=${Date.now()}`) // Add cache-busting parameter
+        .then(response => {
+            console.log('Response status:', response.status); // Debug log
+            return response.json();
+        })
+        .then(data => {
+            console.log('Threat analysis data:', data); // Debug log
+            if (data.success) {
+                const analysis = data.data;
+                displayThreatAnalysis(analysis, ip);
+            } else {
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Error:</strong> ${data.error || 'Failed to analyze IP'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching threat analysis:', error);
+            modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Error:</strong> Failed to connect to threat intelligence service<br>
+                    <small>${error.message}</small>
+                </div>
+            `;
+        });
+}
+
+function displayThreatAnalysis(analysis, ip) {
+    const modalBody = document.getElementById('threatAnalysisModalBody');
+    
+    // Determine threat level and color
+    const threatScore = analysis.threat_score || 0;
+    let threatLevel = 'Unknown';
+    let threatColor = 'secondary';
+    
+    if (threatScore >= 80) {
+        threatLevel = 'Critical';
+        threatColor = 'danger';
+    } else if (threatScore >= 60) {
+        threatLevel = 'High';
+        threatColor = 'warning';
+    } else if (threatScore >= 40) {
+        threatLevel = 'Medium';
+        threatColor = 'info';
+    } else if (threatScore >= 20) {
+        threatLevel = 'Low';
+        threatColor = 'success';
+    } else {
+        threatLevel = 'Very Low';
+        threatColor = 'success';
+    }
+    
+    // Build sources list
+    let sourcesHtml = '';
+    if (analysis.sources && Object.keys(analysis.sources).length > 0) {
+        sourcesHtml = '<div class="row">';
+        for (const [source, details] of Object.entries(analysis.sources)) {
+            const sourceScore = details.score || 0;
+            const isMalicious = sourceScore > 0;
+            const sourceColor = isMalicious ? 'danger' : 'success';
+            const sourceIcon = isMalicious ? 'fa-exclamation-triangle' : 'fa-check-circle';
+            
+            sourcesHtml += `
+                <div class="col-md-6 mb-3">
+                    <div class="card border-${sourceColor}">
+                        <div class="card-header bg-${sourceColor} text-white">
+                            <h6 class="mb-0">
+                                <i class="fas ${sourceIcon}"></i>
+                                ${source.toUpperCase()}
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Score:</strong>
+                                <span class="badge bg-${sourceColor}">${sourceScore}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Status:</strong>
+                                <span class="badge bg-${isMalicious ? 'danger' : 'success'}">${details.status || 'unknown'}</span>
+                            </div>
+                            ${details.details ? `
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        ${Object.entries(details.details).map(([key, value]) => 
+                                            `<strong>${key.replace(/_/g, ' ').toUpperCase()}:</strong> ${value}`
+                                        ).join('<br>')}
+                                    </small>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        sourcesHtml += '</div>';
+    } else {
+        sourcesHtml = '<p class="text-muted">No threat intelligence sources available</p>';
+    }
+    
+    // Build the analysis display
+    modalBody.innerHTML = `
+        <div class="threat-analysis-content">
+            <!-- Threat Score -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-${threatColor}">
+                        <div class="card-header bg-${threatColor} text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-shield-alt"></i>
+                                Threat Assessment
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h3 class="text-${threatColor}">${threatScore}/100</h3>
+                                    <p class="mb-0"><strong>Threat Score</strong></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="badge bg-${threatColor} fs-6">${threatLevel}</span>
+                                    <p class="mb-0"><strong>Risk Level</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Threat Sources -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h5><i class="fas fa-search"></i> Threat Intelligence Sources</h5>
+                    ${sourcesHtml}
+                </div>
+            </div>
+            
+            <!-- Additional Information -->
+            <div class="row">
+                <div class="col-12">
+                    <h5><i class="fas fa-info-circle"></i> Additional Information</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td><strong>IP Address:</strong></td>
+                                    <td><code>${ip}</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Analysis Time:</strong></td>
+                                    <td>${new Date().toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Cache Status:</strong></td>
+                                    <td>
+                                        <span class="badge bg-${analysis.cached ? 'info' : 'warning'}">
+                                            ${analysis.cached ? 'Cached' : 'Fresh'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recommendations -->
+            ${analysis.recommendations && analysis.recommendations.length > 0 ? `
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h5><i class="fas fa-lightbulb"></i> Recommendations</h5>
+                        <div class="alert alert-info">
+                            <ul class="mb-0">
+                                ${analysis.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+            
+            <!-- Actions -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-warning" onclick="blacklistIP('${ip}')">
+                            <i class="fas fa-ban"></i> Blacklist IP
+                        </button>
+                        <a href="/connections?ip=${ip}" class="btn btn-outline-info">
+                            <i class="fas fa-list"></i> View Connections
+                        </a>
+                        <button class="btn btn-outline-secondary" onclick="refreshAnalysis('${ip}')">
+                            <i class="fas fa-sync-alt"></i> Refresh Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function refreshAnalysis(ip) {
+    // Clear cache and re-analyze
+    fetch(`/api/security/threat-analysis/${ip}?refresh=true`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayThreatAnalysis(data.data, ip);
+            } else {
+                alert('Error refreshing analysis: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error refreshing analysis:', error);
+            alert('Error refreshing analysis: ' + error.message);
+        });
+}
+
+function blacklistIP(ip) {
+    if (confirm(`Are you sure you want to blacklist IP ${ip}?`)) {
+        fetch('/api/security/blacklist', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ip_address: ip, duration_hours: 24 })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error blacklisting IP: ' + error.message);
+        });
+    }
+}
+
+// Auto-refresh the page every 60 seconds to show new connections
+let refreshInterval;
+
+function startAutoRefresh() {
+    // Clear any existing interval
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    
+    // Only refresh if no filters are applied
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasFilters = urlParams.get('ip') || urlParams.get('service') || 
+                      urlParams.get('country') || urlParams.get('date_from') || 
+                      urlParams.get('date_to');
+    
+    if (!hasFilters) {
+        refreshInterval = setInterval(() => {
+            console.log('Auto-refreshing connections page...');
+            location.reload();
+        }, 60000); // 60 seconds
+    }
+}
+
+// Start auto-refresh when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    startAutoRefresh();
+});
+
+// Export functionality (could be implemented)
+function exportConnections() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const exportUrl = '/api/connections?' + urlParams.toString() + '&export=true';
+    
+    fetch(exportUrl)
+        .then(response => response.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'honeypot_connections.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        })
+        .catch(error => {
+            console.error('Error exporting connections:', error);
+            alert('Error exporting connections');
+        });
+}
+
+function clearDatabase() {
+    if (confirm('⚠️ WARNING: This will permanently delete ALL connection records from the database!\n\nThis action cannot be undone. Are you sure you want to continue?')) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        
+        // Show loading state
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
+        
+        fetch('/api/clear_database', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ confirm: true })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                // Refresh the page after a short delay to show updated stats
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error clearing database:', error);
+            alert('Error clearing the database: ' + error.message);
+        })
+        .finally(() => {
+            // Restore button state
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+    }
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .threat-analysis-content .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .threat-analysis-content .card-header {
+        font-weight: 600;
+    }
+    
+    .threat-analysis-content .badge {
+        font-size: 0.9em;
+    }
+    
+    .threat-analysis-content .table td {
+        padding: 0.5rem;
+        vertical-align: middle;
+    }
+    
+    .threat-analysis-content .alert {
+        border-left: 4px solid #17a2b8;
+    }
+    
+    .threat-analysis-content .btn-group .btn {
+        margin-right: 0.25rem;
+    }
+    
+    .threat-analysis-content .btn-group .btn:last-child {
+        margin-right: 0;
+    }
+</style>
+{% endblock %} 

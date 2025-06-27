@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Honeypot System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-tachometer-alt"></i> Honeypot Dashboard
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="stat-card text-center">
+            <h3>{{ stats.total_connections }}</h3>
+            <p><i class="fas fa-globe"></i> Total Connections</p>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stat-card text-center" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <h3>{{ stats.service_stats.get('SSH', 0) }}</h3>
+            <p><i class="fas fa-terminal"></i> SSH Attempts</p>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stat-card text-center" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <h3>{{ stats.service_stats.get('HTTP', 0) }}</h3>
+            <p><i class="fas fa-globe"></i> HTTP Attempts</p>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stat-card text-center" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+            <h3>{{ stats.service_stats.get('MySQL', 0) }}</h3>
+            <p><i class="fas fa-database"></i> MySQL Attempts</p>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stat-card text-center" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+            <h3>{{ stats.service_stats.get('FTP', 0) }}</h3>
+            <p><i class="fas fa-folder"></i> FTP Attempts</p>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stat-card text-center" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+            <h3>{{ stats.recent_activity_24h }}</h3>
+            <p><i class="fas fa-clock"></i> Last 24h</p>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-cogs"></i> Quick Actions
+            </div>
+            <div class="card-body">
+                <button class="btn btn-primary me-2" onclick="sendTestAlert()">
+                    <i class="fas fa-bell"></i> Send Test Alert
+                </button>
+                <button class="btn btn-success me-2" onclick="sendStatusReport()">
+                    <i class="fas fa-chart-bar"></i> Send Status Report
+                </button>
+                <button class="btn btn-warning me-2" onclick="refreshDashboard()">
+                    <i class="fas fa-sync-alt"></i> Refresh Dashboard
+                </button>
+                <button class="btn btn-danger me-2" onclick="clearDatabase()">
+                    <i class="fas fa-trash"></i> Clear Database
+                </button>
+                <a href="{{ url_for('connections') }}" class="btn btn-info">
+                    <i class="fas fa-list"></i> View All Connections
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Connections -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-clock"></i> Recent Connections
+            </div>
+            <div class="card-body">
+                {% if recent_connections %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>IP Address</th>
+                                <th>Service</th>
+                                <th>Port</th>
+                                <th>Location</th>
+                                <th>ISP</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for connection in recent_connections %}
+                            <tr>
+                                <td>{{ connection.timestamp | format_timestamp }}</td>
+                                <td>
+                                    <code>{{ connection.ip_address }}</code>
+                                </td>
+                                <td>
+                                    <span class="badge service-badge service-{{ connection.service_name.lower() }}">
+                                        {{ connection.service_name }}
+                                    </span>
+                                </td>
+                                <td>{{ connection.port }}</td>
+                                <td>
+                                    {% if connection.city and connection.country %}
+                                        {{ connection.city }}, {{ connection.country }}
+                                    {% elif connection.country %}
+                                        {{ connection.country }}
+                                    {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if connection.isp %}
+                                        {{ connection.isp | truncate(30) }}
+                                    {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No connections recorded yet</h5>
+                    <p class="text-muted">Connection attempts will appear here once detected.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top IPs and Countries -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-trophy"></i> Top IP Addresses
+            </div>
+            <div class="card-body">
+                {% if stats.top_ips %}
+                <div class="list-group list-group-flush">
+                    {% for ip, count in stats.top_ips[:5] %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <code>{{ ip }}</code>
+                        <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">No IP addresses recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-flag"></i> Top Countries
+            </div>
+            <div class="card-body">
+                {% if stats.top_countries %}
+                <div class="list-group list-group-flush">
+                    {% for country, count in stats.top_countries[:5] %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>{{ country }}</span>
+                        <span class="badge bg-success rounded-pill">{{ count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">No countries recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Messages -->
+<div id="alertContainer"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showAlert(message, type = 'info') {
+    const alertContainer = document.getElementById('alertContainer');
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    alertContainer.innerHTML = alertHtml;
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        const alert = alertContainer.querySelector('.alert');
+        if (alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    }, 5000);
+}
+
+function sendTestAlert() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    
+    fetch('/api/alert', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+        } else {
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error sending test alert: ' + error.message, 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        button.disabled = false;
+        button.innerHTML = originalText;
+    });
+}
+
+function sendStatusReport() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    
+    fetch('/api/status_report', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+        } else {
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error sending status report: ' + error.message, 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        button.disabled = false;
+        button.innerHTML = originalText;
+    });
+}
+
+function clearDatabase() {
+    if (confirm('⚠️ WARNING: This will permanently delete ALL connection records from the database!\n\nThis action cannot be undone. Are you sure you want to continue?')) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        
+        // Show loading state
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
+        
+        fetch('/api/clear_database', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ confirm: true })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                // Refresh the page after a short delay to show updated stats
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Error clearing the database: ' + error.message, 'danger');
+        })
+        .finally(() => {
+            // Restore button state
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+    }
+}
+
+function refreshDashboard() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+    
+    fetch('/api/stats')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            updateDashboardStats(data);
+            showAlert('✅ Dashboard refreshed successfully!', 'success');
+        })
+        .catch(error => {
+            console.error('Error refreshing dashboard:', error);
+            showAlert('❌ Error refreshing dashboard: ' + error.message, 'danger');
+        })
+        .finally(() => {
+            // Restore button state
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+}
+
+// Auto-refresh stats every 30 seconds
+let statsRefreshInterval;
+
+function startStatsRefresh() {
+    // Clear any existing interval
+    if (statsRefreshInterval) {
+        clearInterval(statsRefreshInterval);
+    }
+    
+    statsRefreshInterval = setInterval(() => {
+        console.log('Refreshing dashboard stats...');
+        fetch('/api/stats')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update statistics in the DOM
+                updateDashboardStats(data);
+            })
+            .catch(error => {
+                console.error('Error updating stats:', error);
+            });
+    }, 30000); // 30 seconds
+}
+
+function updateDashboardStats(stats) {
+    // Update total connections
+    const totalConnectionsElement = document.querySelector('.stat-card h3');
+    if (totalConnectionsElement) {
+        totalConnectionsElement.textContent = stats.total_connections || 0;
+    }
+    
+    // Update service stats
+    const sshElement = document.querySelector('.stat-card:nth-child(2) h3');
+    if (sshElement) {
+        sshElement.textContent = stats.service_stats?.SSH || 0;
+    }
+    
+    const httpElement = document.querySelector('.stat-card:nth-child(3) h3');
+    if (httpElement) {
+        httpElement.textContent = stats.service_stats?.HTTP || 0;
+    }
+    
+    const mysqlElement = document.querySelector('.stat-card:nth-child(4) h3');
+    if (mysqlElement) {
+        mysqlElement.textContent = stats.service_stats?.MySQL || 0;
+    }
+    
+    const ftpElement = document.querySelector('.stat-card:nth-child(5) h3');
+    if (ftpElement) {
+        ftpElement.textContent = stats.service_stats?.FTP || 0;
+    }
+    
+    const recentActivityElement = document.querySelector('.stat-card:nth-child(6) h3');
+    if (recentActivityElement) {
+        recentActivityElement.textContent = stats.recent_activity_24h || 0;
+    }
+    
+    // Update top IPs
+    updateTopIPs(stats.top_ips || []);
+    
+    // Update top countries
+    updateTopCountries(stats.top_countries || []);
+}
+
+function updateTopIPs(topIPs) {
+    const topIPsContainer = document.querySelector('.col-md-6:first-child .list-group');
+    if (topIPsContainer) {
+        if (topIPs.length > 0) {
+            topIPsContainer.innerHTML = topIPs.slice(0, 5).map(ip => `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <code>${ip[0]}</code>
+                    <span class="badge bg-primary rounded-pill">${ip[1]}</span>
+                </div>
+            `).join('');
+        } else {
+            topIPsContainer.innerHTML = '<p class="text-muted text-center py-3">No IP addresses recorded yet.</p>';
+        }
+    }
+}
+
+function updateTopCountries(topCountries) {
+    const topCountriesContainer = document.querySelector('.col-md-6:last-child .list-group');
+    if (topCountriesContainer) {
+        if (topCountries.length > 0) {
+            topCountriesContainer.innerHTML = topCountries.slice(0, 5).map(country => `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>${country[0]}</span>
+                    <span class="badge bg-success rounded-pill">${country[1]}</span>
+                </div>
+            `).join('');
+        } else {
+            topCountriesContainer.innerHTML = '<p class="text-muted text-center py-3">No countries recorded yet.</p>';
+        }
+    }
+}
+
+// Start auto-refresh when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    startStatsRefresh();
+});
+</script>
+{% endblock %} 

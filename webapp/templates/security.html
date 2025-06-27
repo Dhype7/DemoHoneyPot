@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Dashboard - Honeypot System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .threat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .security-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .blacklist-item {
+            background: #fff5f5;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #dc3545;
+        }
+        .threat-item {
+            background: #fffbf0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #ffc107;
+        }
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-alt"></i> Honeypot Dashboard
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home"></i> Dashboard</a>
+                <a class="nav-link" href="/connections"><i class="fas fa-list"></i> Connections</a>
+                <a class="nav-link active" href="/security"><i class="fas fa-lock"></i> Security</a>
+                <a class="nav-link" href="/settings"><i class="fas fa-cog"></i> Settings</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h2><i class="fas fa-lock"></i> Security Dashboard</h2>
+        <p class="text-muted">Monitor threat intelligence and rate limiting activities</p>
+
+        <div class="row">
+            <!-- Threat Intelligence Statistics -->
+            <div class="col-md-6">
+                <div class="threat-card">
+                    <h4><i class="fas fa-brain"></i> Threat Intelligence</h4>
+                    <div class="row mt-3">
+                        <div class="col-6">
+                            <h5>{{ threat_stats.total_ips_analyzed or 0 }}</h5>
+                            <small>IPs Analyzed</small>
+                        </div>
+                        <div class="col-6">
+                            <h5>{{ threat_stats.high_risk_ips or 0 }}</h5>
+                            <small>High Risk IPs</small>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-6">
+                            <h5>{{ threat_stats.cache_hits or 0 }}</h5>
+                            <small>Cache Hits</small>
+                        </div>
+                        <div class="col-6">
+                            <h5>{{ threat_stats.api_calls or 0 }}</h5>
+                            <small>API Calls</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rate Limiting Statistics -->
+            <div class="col-md-6">
+                <div class="security-card">
+                    <h4><i class="fas fa-shield-alt"></i> Rate Limiting</h4>
+                    <div class="row mt-3">
+                        <div class="col-6">
+                            <h5>{{ rate_stats.blocked_connections or 0 }}</h5>
+                            <small>Blocked Connections</small>
+                        </div>
+                        <div class="col-6">
+                            <h5>{{ rate_stats.blacklisted_ips or 0 }}</h5>
+                            <small>Blacklisted IPs</small>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-6">
+                            <h5>{{ rate_stats.rate_limit_violations or 0 }}</h5>
+                            <small>Rate Limit Violations</small>
+                        </div>
+                        <div class="col-6">
+                            <h5>{{ rate_stats.unique_ips_seen or 0 }}</h5>
+                            <small>Unique IPs Seen</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <!-- Blacklisted IPs -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-ban"></i> Blacklisted IP Addresses</h5>
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshBlacklist()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card-body" id="blacklist-container">
+                        {% if blacklisted_ips %}
+                            {% for ip_data in blacklisted_ips %}
+                            <div class="blacklist-item">
+                                <div class="row">
+                                    <div class="col-8">
+                                        <strong>{{ ip_data.ip_address }}</strong>
+                                        <br><small class="text-muted">{{ ip_data.reason }}</small>
+                                    </div>
+                                    <div class="col-4 text-end">
+                                        <button class="btn btn-sm btn-success" onclick="whitelistIP('{{ ip_data.ip_address }}')">
+                                            <i class="fas fa-check"></i> Whitelist
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Blacklisted: {{ ip_data.blacklisted_at }}</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Expires: {{ ip_data.expires_at }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted text-center">No blacklisted IPs</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- High Threat Connections -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-exclamation-triangle"></i> High Threat Connections</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if high_threat_connections %}
+                            {% for connection in high_threat_connections %}
+                            <div class="threat-item">
+                                <div class="row">
+                                    <div class="col-8">
+                                        <strong>{{ connection.ip_address }}</strong>
+                                        <br><small class="text-muted">{{ connection.service_name }} - {{ connection.timestamp }}</small>
+                                    </div>
+                                    <div class="col-4 text-end">
+                                        <span class="badge bg-danger">Score: {{ connection.threat_score }}/100</span>
+                                    </div>
+                                </div>
+                                {% if connection.threat_sources %}
+                                <div class="mt-2">
+                                    <small class="text-muted">Threat Sources: {{ connection.threat_sources|join(', ') }}</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted text-center">No high threat connections</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual IP Management -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-tools"></i> Manual IP Management</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Blacklist IP Address</h6>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="blacklist-ip" placeholder="Enter IP address">
+                                    <input type="number" class="form-control" id="blacklist-duration" placeholder="Hours" value="24" min="1" max="168">
+                                    <button class="btn btn-danger" onclick="blacklistIP()">
+                                        <i class="fas fa-ban"></i> Blacklist
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Whitelist IP Address</h6>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="whitelist-ip" placeholder="Enter IP address">
+                                    <button class="btn btn-success" onclick="whitelistIP()">
+                                        <i class="fas fa-check"></i> Whitelist
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Threat Analysis -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-search"></i> Threat Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="analyze-ip" placeholder="Enter IP address to analyze">
+                            <button class="btn btn-primary" onclick="analyzeIP()">
+                                <i class="fas fa-search"></i> Analyze
+                            </button>
+                        </div>
+                        <div id="analysis-result"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function blacklistIP() {
+            const ip = document.getElementById('blacklist-ip').value;
+            const duration = document.getElementById('blacklist-duration').value;
+            
+            if (!ip) {
+                alert('Please enter an IP address');
+                return;
+            }
+            
+            fetch('/api/security/blacklist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ip_address: ip,
+                    duration_hours: parseInt(duration)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('IP blacklisted successfully');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            });
+        }
+        
+        function whitelistIP(ip = null) {
+            const ipAddress = ip || document.getElementById('whitelist-ip').value;
+            
+            if (!ipAddress) {
+                alert('Please enter an IP address');
+                return;
+            }
+            
+            fetch('/api/security/whitelist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ip_address: ipAddress
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('IP whitelisted successfully');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            });
+        }
+        
+        function analyzeIP() {
+            const ip = document.getElementById('analyze-ip').value;
+            
+            if (!ip) {
+                alert('Please enter an IP address');
+                return;
+            }
+            
+            fetch(`/api/security/threat-analysis/${ip}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayAnalysis(data.data);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            });
+        }
+        
+        function displayAnalysis(analysis) {
+            const container = document.getElementById('analysis-result');
+            container.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <h6>Threat Analysis Results</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Threat Score:</strong> ${analysis.threat_score}/100</p>
+                                <p><strong>Risk Level:</strong> <span class="badge bg-${analysis.risk_level === 'high' ? 'danger' : analysis.risk_level === 'medium' ? 'warning' : 'success'}">${analysis.risk_level}</span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Sources:</strong> ${analysis.sources ? Object.keys(analysis.sources).join(', ') : 'None'}</p>
+                                <p><strong>Last Updated:</strong> ${analysis.last_updated || 'Unknown'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function refreshBlacklist() {
+            location.reload();
+        }
+    </script>
+</body>
+</html> 

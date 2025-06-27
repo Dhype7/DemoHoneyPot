@@ -1,0 +1,6 @@
+flask==2.3.3
+requests==2.31.0
+geoip2==4.7.0
+python-whois==0.8.0
+shodan==1.29.1
+python-dateutil==2.8.2 

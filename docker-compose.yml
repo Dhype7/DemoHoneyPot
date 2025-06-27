@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  honeypot:
+    build: .
+    container_name: honeypot-system
+    restart: unless-stopped
+    ports:
+      - "22:22"      # SSH
+      - "2122:2122"  # FTP 
+      - "80:80"      # HTTP
+      - "3306:3306"  # MySQL
+      - "5000:5000"  # Web Dashboard
+    volumes:
+      - ./database:/app/database
+      - ./logs:/app/logs
+      - ./config:/app/config
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - HOST=0.0.0.0
+      - SSH_PORT=22
+      - HTTP_PORT=80
+      - FTP_PORT=2122
+      - MYSQL_PORT=3306
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=5000
+    env_file:
+      - .env
+    networks:
+      - honeypot-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  # Optional: Add a reverse proxy for better security
+  nginx:
+    image: nginx:alpine
+    container_name: honeypot-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - honeypot
+    networks:
+      - honeypot-network
+    profiles:
+      - proxy
+
+networks:
+  honeypot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  honeypot-data:
+    driver: local 
