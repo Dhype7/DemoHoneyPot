@@ -28,7 +28,7 @@
 1. **Clone the repository**
    ```bash
    git clone https://github.com/Dhype7/DemoHonyPot.git
-   cd DemoHonyPot
+   cd DemoHoneyPot
    ```
 
 2. **Install dependencies**
